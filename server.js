@@ -413,8 +413,8 @@ function calcRealizedVol(prices, window = 30) {
 // ---------------------------------------------------------------------------
 
 const CATEGORY_ORDER = [
-  "Equity Indices", "Stocks", "Energy", "Agriculture",
-  "Metals", "Treasuries", "Currencies", "Crypto",
+  "Energy", "Agriculture", "Metals", "Treasuries",
+  "Currencies", "Crypto", "Equity Indices", "Stocks",
 ];
 
 app.get("/api/assets", (req, res) => {
