@@ -295,9 +295,10 @@
       border: 1px solid var(--border);
       border-radius: 14px;
       padding: 20px;
-      margin-bottom: 20px;
+      margin-bottom: 32px;
       position: relative;
       min-height: 420px;
+      padding-bottom: 28px;
     }
 
     .chart-container canvas {
@@ -485,7 +486,7 @@
     <!-- Chart -->
     <div class="chart-container">
       <div class="chart-legend" id="chart-legend"></div>
-      <div class="chart-hint" id="chart-hint">Scroll to zoom &middot; Drag to pan &middot; Double-click to reset</div>
+      <div class="chart-hint" id="chart-hint">Scroll to zoom &middot; Drag to pan &middot; Use axes to zoom/pan one direction &middot; Double-click to reset</div>
       <button class="reset-zoom-btn" id="reset-zoom" style="display:none;">Reset Zoom</button>
       <canvas id="main-chart"></canvas>
       <div class="loading-overlay" id="loading">
@@ -908,6 +909,79 @@
 
       // Set canvas height
       $("main-chart").parentElement.style.height = "480px";
+
+      // Axis-aware zoom: intercept wheel on axis areas for single-axis zoom
+      const canvas = $("main-chart");
+      let axisDrag = null; // track axis-specific drag state
+
+      canvas.addEventListener("wheel", (e) => {
+        if (!chart) return;
+        const area = chart.chartArea;
+        if (!area) return;
+
+        const onXAxis = e.offsetY > area.bottom;
+        const onYAxis = e.offsetX < area.left || e.offsetX > area.right;
+
+        if (onXAxis || onYAxis) {
+          e.preventDefault();
+          const zoomFactor = e.deltaY > 0 ? 1.08 : 0.92;
+          chart.zoom(
+            { x: onXAxis ? zoomFactor : 1, y: onYAxis ? zoomFactor : 1 },
+            undefined,
+            "default"
+          );
+          $("reset-zoom").style.display = "block";
+        }
+      }, { passive: false });
+
+      // Axis-specific drag-to-pan on axis areas
+      canvas.addEventListener("pointerdown", (e) => {
+        if (!chart) return;
+        const area = chart.chartArea;
+        if (!area) return;
+
+        const onXAxis = e.offsetY > area.bottom;
+        const onYAxis = e.offsetX < area.left || e.offsetX > area.right;
+
+        if (onXAxis || onYAxis) {
+          axisDrag = { axis: onXAxis ? "x" : "y", startX: e.clientX, startY: e.clientY };
+          canvas.setPointerCapture(e.pointerId);
+          e.preventDefault();
+        }
+      });
+
+      canvas.addEventListener("pointermove", (e) => {
+        if (!axisDrag || !chart) return;
+        const dx = e.clientX - axisDrag.startX;
+        const dy = e.clientY - axisDrag.startY;
+
+        if (axisDrag.axis === "x" && Math.abs(dx) > 2) {
+          chart.pan({ x: dx, y: 0 }, undefined, "default");
+          axisDrag.startX = e.clientX;
+          $("reset-zoom").style.display = "block";
+        } else if (axisDrag.axis === "y" && Math.abs(dy) > 2) {
+          chart.pan({ x: 0, y: dy }, undefined, "default");
+          axisDrag.startY = e.clientY;
+          $("reset-zoom").style.display = "block";
+        }
+      });
+
+      canvas.addEventListener("pointerup", () => { axisDrag = null; });
+      canvas.addEventListener("pointercancel", () => { axisDrag = null; });
+
+      // Change cursor when hovering over axes
+      canvas.addEventListener("mousemove", (e) => {
+        if (!chart || axisDrag) return;
+        const area = chart.chartArea;
+        if (!area) return;
+        if (e.offsetY > area.bottom) {
+          canvas.style.cursor = "ew-resize";
+        } else if (e.offsetX < area.left || e.offsetX > area.right) {
+          canvas.style.cursor = "ns-resize";
+        } else {
+          canvas.style.cursor = "grab";
+        }
+      });
 
       // Reset zoom button
       $("reset-zoom").style.display = "none";
