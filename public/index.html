@@ -7,6 +7,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js"></script>
   <style>
     :root {
       --bg-primary: #0a0b10;
@@ -374,6 +376,31 @@
       border-radius: 0;
     }
 
+    .chart-hint {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .reset-zoom-btn {
+      position: absolute;
+      top: 16px;
+      right: 20px;
+      z-index: 5;
+      padding: 6px 14px;
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .reset-zoom-btn:hover { background: var(--bg-card-hover); color: var(--text-primary); border-color: var(--text-muted); }
+
     /* --- Responsive --- */
     @media (max-width: 768px) {
       .header { flex-direction: column; gap: 8px; }
@@ -458,6 +485,8 @@
     <!-- Chart -->
     <div class="chart-container">
       <div class="chart-legend" id="chart-legend"></div>
+      <div class="chart-hint" id="chart-hint">Scroll to zoom &middot; Drag to pan &middot; Double-click to reset</div>
+      <button class="reset-zoom-btn" id="reset-zoom" style="display:none;">Reset Zoom</button>
       <canvas id="main-chart"></canvas>
       <div class="loading-overlay" id="loading">
         <div class="spinner"></div>
@@ -765,6 +794,29 @@
           },
           plugins: {
             legend: { display: false },
+            zoom: {
+              pan: {
+                enabled: true,
+                mode: "xy",
+                modifierKey: null,
+              },
+              zoom: {
+                wheel: {
+                  enabled: true,
+                  speed: 0.05,
+                },
+                pinch: {
+                  enabled: true,
+                },
+                drag: {
+                  enabled: false,
+                },
+                mode: "xy",
+                onZoomComplete: () => {
+                  $("reset-zoom").style.display = "block";
+                },
+              },
+            },
             tooltip: {
               backgroundColor: "rgba(26, 29, 46, 0.95)",
               borderColor: "rgba(42, 45, 66, 1)",
@@ -856,6 +908,21 @@
 
       // Set canvas height
       $("main-chart").parentElement.style.height = "480px";
+
+      // Reset zoom button
+      $("reset-zoom").style.display = "none";
+      $("reset-zoom").onclick = () => {
+        chart.resetZoom();
+        $("reset-zoom").style.display = "none";
+      };
+
+      // Double-click to reset zoom
+      $("main-chart").addEventListener("dblclick", () => {
+        if (chart) {
+          chart.resetZoom();
+          $("reset-zoom").style.display = "none";
+        }
+      });
     }
 
     // -----------------------------------------------------------------------
