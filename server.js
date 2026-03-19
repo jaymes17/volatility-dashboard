@@ -438,7 +438,7 @@ app.get("/api/assets", (req, res) => {
 
 app.get("/api/data/:asset", async (req, res) => {
   const assetName = req.params.asset;
-  const days = parseInt(req.query.days) || 365;
+  const days = req.query.days !== undefined ? parseInt(req.query.days) : 365;
   const cfg = ASSETS[assetName];
 
   if (!cfg) {
