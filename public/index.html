@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Volatility Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+  <style>
+    :root {
+      --bg-primary: #0a0b10;
+      --bg-secondary: #12141d;
+      --bg-card: #1a1d2e;
+      --bg-card-hover: #1e2236;
+      --border: #2a2d42;
+      --border-active: #3b82f6;
+      --text-primary: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --blue: #3b82f6;
+      --blue-dim: rgba(59, 130, 246, 0.15);
+      --amber: #f59e0b;
+      --amber-dim: rgba(245, 158, 11, 0.15);
+      --green: #10b981;
+      --red: #ef4444;
+      --purple: #a855f7;
+      --purple-dim: rgba(168, 85, 247, 0.15);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* --- Header --- */
+    .header {
+      padding: 28px 0 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+
+    .header h1 {
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #f1f5f9, #94a3b8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .header .subtitle {
+      color: var(--text-muted);
+      font-size: 13px;
+      margin-top: 4px;
+    }
+
+    .header-right {
+      text-align: right;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    #last-updated { margin-top: 2px; }
+
+    /* --- Controls --- */
+    .controls {
+      display: flex;
+      align-items: flex-end;
+      gap: 24px;
+      padding-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .control-group label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+
+    /* --- Custom searchable dropdown --- */
+    .asset-picker {
+      position: relative;
+      width: 300px;
+    }
+
+    .asset-picker-trigger {
+      width: 100%;
+      padding: 10px 36px 10px 14px;
+      background: var(--bg-card);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: inherit;
+      font-weight: 500;
+      cursor: pointer;
+      text-align: left;
+      transition: border-color 0.2s;
+      position: relative;
+    }
+
+    .asset-picker-trigger::after {
+      content: "";
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      border: 5px solid transparent;
+      border-top-color: var(--text-muted);
+    }
+
+    .asset-picker-trigger:hover, .asset-picker.open .asset-picker-trigger {
+      border-color: var(--blue);
+    }
+
+    .asset-picker.open .asset-picker-trigger::after {
+      border-top-color: transparent;
+      border-bottom-color: var(--text-muted);
+      transform: translateY(-80%);
+    }
+
+    .asset-picker-dropdown {
+      display: none;
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      width: 340px;
+      max-height: 420px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      z-index: 100;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+      overflow: hidden;
+    }
+
+    .asset-picker.open .asset-picker-dropdown { display: block; }
+
+    .asset-picker-search {
+      width: 100%;
+      padding: 12px 14px;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      border: none;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+    }
+
+    .asset-picker-search::placeholder { color: var(--text-muted); }
+
+    .asset-picker-list {
+      max-height: 360px;
+      overflow-y: auto;
+      padding: 4px 0;
+    }
+
+    .asset-picker-list::-webkit-scrollbar { width: 6px; }
+    .asset-picker-list::-webkit-scrollbar-track { background: transparent; }
+    .asset-picker-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    .asset-picker-category {
+      padding: 8px 14px 4px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      user-select: none;
+    }
+
+    .asset-picker-item {
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.1s;
+    }
+
+    .asset-picker-item:hover { background: rgba(59,130,246,0.1); color: var(--text-primary); }
+    .asset-picker-item.active { background: var(--blue); color: #fff; }
+    .asset-picker-item.hidden { display: none; }
+
+    .asset-picker-empty {
+      padding: 20px 14px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    .tf-buttons {
+      display: flex;
+      gap: 4px;
+      background: var(--bg-secondary);
+      border-radius: 10px;
+      padding: 3px;
+      border: 1px solid var(--border);
+    }
+
+    .tf-btn {
+      padding: 8px 16px;
+      background: transparent;
+      color: var(--text-muted);
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tf-btn:hover { color: var(--text-primary); background: rgba(255,255,255,0.04); }
+    .tf-btn.active { background: var(--blue); color: #fff; }
+
+    .refresh-btn {
+      padding: 10px 20px;
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-left: auto;
+    }
+
+    .refresh-btn:hover { background: var(--bg-card-hover); color: var(--text-primary); border-color: var(--text-muted); }
+
+    /* --- Stat Cards --- */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      padding-bottom: 20px;
+    }
+
+    .stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 20px;
+      transition: border-color 0.2s, transform 0.15s;
+    }
+
+    .stat-card:hover { border-color: var(--text-muted); transform: translateY(-1px); }
+
+    .stat-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .stat-value {
+      font-size: 26px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .stat-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* --- Chart --- */
+    .chart-container {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+      margin-bottom: 20px;
+      position: relative;
+      min-height: 420px;
+    }
+
+    .chart-container canvas {
+      width: 100% !important;
+    }
+
+    /* --- Loading overlay --- */
+    .loading-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(10, 11, 16, 0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 14px;
+      z-index: 10;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s;
+    }
+
+    .loading-overlay.visible { opacity: 1; pointer-events: auto; }
+
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid var(--border);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* --- Description --- */
+    .description {
+      color: var(--text-muted);
+      font-size: 13px;
+      line-height: 1.6;
+      padding-bottom: 32px;
+    }
+
+    /* --- Legend bar --- */
+    .chart-legend {
+      display: flex;
+      gap: 24px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .legend-line {
+      width: 20px;
+      height: 3px;
+      border-radius: 2px;
+    }
+
+    .legend-dashed {
+      width: 20px;
+      height: 0;
+      border-top: 3px dashed;
+      border-radius: 0;
+    }
+
+    /* --- Responsive --- */
+    @media (max-width: 768px) {
+      .header { flex-direction: column; gap: 8px; }
+      .controls { flex-direction: column; align-items: stretch; }
+      .asset-picker { width: 100%; }
+      .refresh-btn { margin-left: 0; }
+      .stats-row { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div>
+        <h1>Volatility Dashboard</h1>
+        <div class="subtitle">Implied & realized volatility across major asset classes</div>
+      </div>
+      <div class="header-right">
+        <div>Source: Yahoo Finance / CBOE Indices</div>
+        <div id="last-updated"></div>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls">
+      <div class="control-group">
+        <label>Asset</label>
+        <div class="asset-picker" id="asset-picker">
+          <button class="asset-picker-trigger" id="asset-picker-trigger">S&P 500</button>
+          <div class="asset-picker-dropdown">
+            <input type="text" class="asset-picker-search" id="asset-search" placeholder="Search assets..." autocomplete="off" />
+            <div class="asset-picker-list" id="asset-picker-list"></div>
+          </div>
+        </div>
+      </div>
+      <div class="control-group">
+        <label>Timeframe</label>
+        <div class="tf-buttons" id="tf-buttons">
+          <button class="tf-btn" data-days="30">1M</button>
+          <button class="tf-btn" data-days="90">3M</button>
+          <button class="tf-btn" data-days="180">6M</button>
+          <button class="tf-btn active" data-days="365">1Y</button>
+          <button class="tf-btn" data-days="730">2Y</button>
+          <button class="tf-btn" data-days="1825">5Y</button>
+          <button class="tf-btn" data-days="3650">10Y</button>
+          <button class="tf-btn" data-days="0">Max</button>
+        </div>
+      </div>
+      <button class="refresh-btn" id="refresh-btn">&#x21bb; Refresh</button>
+    </div>
+
+    <!-- Stat Cards -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">Current Price</div>
+        <div class="stat-value" id="stat-price" style="color: var(--blue);">--</div>
+        <div class="stat-sub" id="stat-price-sub"></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Current Volatility</div>
+        <div class="stat-value" id="stat-vol" style="color: var(--amber);">--</div>
+        <div class="stat-sub" id="stat-vol-sub"></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Price Change</div>
+        <div class="stat-value" id="stat-change" style="color: var(--green);">--</div>
+        <div class="stat-sub" id="stat-change-sub"></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Vol Percentile</div>
+        <div class="stat-value" id="stat-percentile" style="color: var(--purple);">--</div>
+        <div class="stat-sub" id="stat-percentile-sub">of period range</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Vol Range</div>
+        <div class="stat-value" id="stat-range" style="color: var(--text-secondary);">--</div>
+        <div class="stat-sub" id="stat-range-sub"></div>
+      </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="chart-container">
+      <div class="chart-legend" id="chart-legend"></div>
+      <canvas id="main-chart"></canvas>
+      <div class="loading-overlay" id="loading">
+        <div class="spinner"></div>
+      </div>
+    </div>
+
+    <!-- Description -->
+    <div class="description" id="description"></div>
+  </div>
+
+  <script>
+    // -----------------------------------------------------------------------
+    // State
+    // -----------------------------------------------------------------------
+    let currentAsset = "S&P 500";
+    let currentDays = 365;
+    let chart = null;
+
+    const $ = (id) => document.getElementById(id);
+
+    // -----------------------------------------------------------------------
+    // Init
+    // -----------------------------------------------------------------------
+    let allAssets = {}; // { category: [{ name, ... }] }
+
+    async function init() {
+      const res = await fetch("/api/assets");
+      allAssets = await res.json();
+
+      buildAssetList(allAssets);
+      setupAssetPicker();
+
+      document.querySelectorAll(".tf-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          document.querySelectorAll(".tf-btn").forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+          currentDays = parseInt(btn.dataset.days);
+          loadData();
+        });
+      });
+
+      $("refresh-btn").addEventListener("click", loadData);
+      loadData();
+    }
+
+    function buildAssetList(grouped, filter = "") {
+      const list = $("asset-picker-list");
+      list.innerHTML = "";
+      const lc = filter.toLowerCase();
+      let hasResults = false;
+
+      for (const [category, assets] of Object.entries(grouped)) {
+        const matching = assets.filter((a) =>
+          !lc || a.name.toLowerCase().includes(lc) || a.priceLabel.toLowerCase().includes(lc)
+        );
+        if (matching.length === 0) continue;
+        hasResults = true;
+
+        const catEl = document.createElement("div");
+        catEl.className = "asset-picker-category";
+        catEl.textContent = category;
+        list.appendChild(catEl);
+
+        for (const a of matching) {
+          const item = document.createElement("div");
+          item.className = "asset-picker-item" + (a.name === currentAsset ? " active" : "");
+          item.textContent = a.name;
+          item.dataset.value = a.name;
+          item.addEventListener("click", () => selectAsset(a.name));
+          list.appendChild(item);
+        }
+      }
+
+      if (!hasResults) {
+        const empty = document.createElement("div");
+        empty.className = "asset-picker-empty";
+        empty.textContent = "No matching assets";
+        list.appendChild(empty);
+      }
+    }
+
+    function selectAsset(name) {
+      currentAsset = name;
+      $("asset-picker-trigger").textContent = name;
+      closePicker();
+      loadData();
+    }
+
+    function setupAssetPicker() {
+      const picker = $("asset-picker");
+      const trigger = $("asset-picker-trigger");
+      const search = $("asset-search");
+
+      trigger.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const isOpen = picker.classList.contains("open");
+        if (isOpen) {
+          closePicker();
+        } else {
+          picker.classList.add("open");
+          search.value = "";
+          buildAssetList(allAssets);
+          setTimeout(() => search.focus(), 10);
+        }
+      });
+
+      search.addEventListener("input", () => {
+        buildAssetList(allAssets, search.value);
+      });
+
+      search.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") closePicker();
+        if (e.key === "Enter") {
+          const first = document.querySelector(".asset-picker-item");
+          if (first) selectAsset(first.dataset.value);
+        }
+      });
+
+      document.addEventListener("click", (e) => {
+        if (!picker.contains(e.target)) closePicker();
+      });
+    }
+
+    function closePicker() {
+      $("asset-picker").classList.remove("open");
+    }
+
+    // -----------------------------------------------------------------------
+    // Data loading
+    // -----------------------------------------------------------------------
+    async function loadData() {
+      showLoading(true);
+
+      try {
+        const res = await fetch(`/api/data/${encodeURIComponent(currentAsset)}?days=${currentDays}`);
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.error || "Failed to fetch data");
+        }
+        const data = await res.json();
+        updateStats(data);
+        updateChart(data);
+        $("description").textContent = data.description;
+        $("last-updated").textContent = `Updated: ${new Date().toLocaleString("en-US", {
+          month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit",
+        })}`;
+      } catch (err) {
+        console.error(err);
+        $("description").textContent = `Error: ${err.message}`;
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    function showLoading(show) {
+      $("loading").classList.toggle("visible", show);
+    }
+
+    // -----------------------------------------------------------------------
+    // Stats
+    // -----------------------------------------------------------------------
+    function updateStats(data) {
+      const s = data.stats;
+
+      $("stat-price").textContent = s.latestPrice != null
+        ? `$${s.latestPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        : "--";
+      $("stat-price-sub").textContent = data.priceLabel;
+
+      $("stat-vol").textContent = s.latestVol != null
+        ? `${s.latestVol.toFixed(1)}%`
+        : "--";
+      $("stat-vol-sub").textContent = data.volLabel;
+
+      const chg = s.priceChange || 0;
+      $("stat-change").textContent = `${chg >= 0 ? "+" : ""}${chg.toFixed(1)}%`;
+      $("stat-change").style.color = chg >= 0 ? "var(--green)" : "var(--red)";
+
+      const tfLabel = document.querySelector(".tf-btn.active")?.textContent || "";
+      $("stat-change-sub").textContent = `over ${tfLabel}`;
+
+      const pctVal = s.volPercentile != null ? Math.round(s.volPercentile) : null;
+      const ordinal = (n) => {
+        const s = ["th", "st", "nd", "rd"];
+        const v = n % 100;
+        return n + (s[(v - 20) % 10] || s[v] || s[0]);
+      };
+      $("stat-percentile").textContent = pctVal != null ? ordinal(pctVal) : "--";
+
+      if (s.volHigh != null && s.volLow != null) {
+        $("stat-range").textContent = `${s.volLow.toFixed(1)}% \u2013 ${s.volHigh.toFixed(1)}%`;
+        $("stat-range-sub").textContent = s.volMean != null ? `Mean: ${s.volMean.toFixed(1)}%` : "";
+      } else {
+        $("stat-range").textContent = "--";
+        $("stat-range-sub").textContent = "";
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // Chart
+    // -----------------------------------------------------------------------
+    function updateChart(data) {
+      const pricePoints = data.price.map((p) => ({ x: p.date, y: p.close }));
+      const volPoints = data.vol.map((p) => ({ x: p.date, y: p.close }));
+      const realizedPoints = data.realizedVol.map((p) => ({ x: p.date, y: p.close }));
+
+      // Build legend
+      const legendEl = $("chart-legend");
+      legendEl.innerHTML = "";
+
+      const addLegend = (color, label, style = "solid") => {
+        const item = document.createElement("div");
+        item.className = "legend-item";
+
+        const indicator = document.createElement("div");
+        if (style === "dashed") {
+          indicator.className = "legend-dashed";
+          indicator.style.borderColor = color;
+        } else if (style === "area") {
+          indicator.className = "legend-dot";
+          indicator.style.background = color;
+        } else {
+          indicator.className = "legend-line";
+          indicator.style.background = color;
+        }
+
+        const text = document.createElement("span");
+        text.textContent = label;
+
+        item.appendChild(indicator);
+        item.appendChild(text);
+        legendEl.appendChild(item);
+      };
+
+      addLegend("var(--blue)", data.priceLabel, "area");
+      addLegend("var(--amber)", data.volLabel, "solid");
+      if (data.hasImpliedVol && realizedPoints.length > 0) {
+        addLegend("var(--purple)", "30-Day Realized Vol", "dashed");
+      }
+
+      // Build datasets
+      const datasets = [
+        {
+          label: data.priceLabel,
+          data: pricePoints,
+          yAxisID: "y-price",
+          borderColor: "rgba(59, 130, 246, 1)",
+          backgroundColor: "rgba(59, 130, 246, 0.06)",
+          fill: true,
+          borderWidth: 2,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          pointHoverBackgroundColor: "rgba(59, 130, 246, 1)",
+          tension: 0.3,
+          order: 2,
+        },
+        {
+          label: data.volLabel,
+          data: volPoints,
+          yAxisID: "y-vol",
+          borderColor: "rgba(245, 158, 11, 1)",
+          backgroundColor: "transparent",
+          fill: false,
+          borderWidth: 2.5,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          pointHoverBackgroundColor: "rgba(245, 158, 11, 1)",
+          tension: 0.3,
+          order: 1,
+        },
+      ];
+
+      if (data.hasImpliedVol && realizedPoints.length > 0) {
+        datasets.push({
+          label: "30-Day Realized Vol",
+          data: realizedPoints,
+          yAxisID: "y-vol",
+          borderColor: "rgba(168, 85, 247, 0.6)",
+          backgroundColor: "transparent",
+          fill: false,
+          borderWidth: 1.5,
+          borderDash: [6, 4],
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          pointHoverBackgroundColor: "rgba(168, 85, 247, 1)",
+          tension: 0.3,
+          order: 1,
+        });
+      }
+
+      // Destroy existing chart
+      if (chart) chart.destroy();
+
+      const ctx = $("main-chart").getContext("2d");
+
+      chart = new Chart(ctx, {
+        type: "line",
+        data: { datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            mode: "index",
+            intersect: false,
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              backgroundColor: "rgba(26, 29, 46, 0.95)",
+              borderColor: "rgba(42, 45, 66, 1)",
+              borderWidth: 1,
+              titleColor: "#f1f5f9",
+              bodyColor: "#94a3b8",
+              titleFont: { weight: "600", size: 13 },
+              bodyFont: { size: 13 },
+              padding: 14,
+              cornerRadius: 10,
+              displayColors: true,
+              boxWidth: 10,
+              boxHeight: 10,
+              boxPadding: 4,
+              callbacks: {
+                title: (items) => {
+                  if (!items.length) return "";
+                  const d = new Date(items[0].parsed.x);
+                  return d.toLocaleDateString("en-US", {
+                    month: "short", day: "numeric", year: "numeric",
+                  });
+                },
+                label: (item) => {
+                  if (item.datasetIndex === 0) {
+                    return ` ${item.dataset.label}: $${item.parsed.y.toLocaleString("en-US", {
+                      minimumFractionDigits: 2, maximumFractionDigits: 2,
+                    })}`;
+                  }
+                  return ` ${item.dataset.label}: ${item.parsed.y.toFixed(1)}%`;
+                },
+              },
+            },
+          },
+          scales: {
+            x: {
+              type: "time",
+              time: {
+                tooltipFormat: "MMM d, yyyy",
+                displayFormats: {
+                  day: "MMM d",
+                  week: "MMM d",
+                  month: "MMM yyyy",
+                  year: "yyyy",
+                },
+              },
+              grid: { color: "rgba(255,255,255,0.04)", drawBorder: false },
+              ticks: {
+                color: "#64748b",
+                font: { size: 11 },
+                maxTicksLimit: 12,
+              },
+            },
+            "y-price": {
+              type: "linear",
+              position: "left",
+              title: {
+                display: true,
+                text: "Price ($)",
+                color: "#64748b",
+                font: { size: 12, weight: "500" },
+              },
+              grid: { color: "rgba(59,130,246,0.08)", drawBorder: false },
+              ticks: {
+                color: "#3b82f6",
+                font: { size: 11 },
+                callback: (v) => "$" + v.toLocaleString(),
+              },
+            },
+            "y-vol": {
+              type: "linear",
+              position: "right",
+              title: {
+                display: true,
+                text: "Volatility (%)",
+                color: "#64748b",
+                font: { size: 12, weight: "500" },
+              },
+              grid: { display: false },
+              ticks: {
+                color: "#f59e0b",
+                font: { size: 11 },
+                callback: (v) => v.toFixed(0) + "%",
+              },
+              min: 0,
+            },
+          },
+        },
+      });
+
+      // Set canvas height
+      $("main-chart").parentElement.style.height = "480px";
+    }
+
+    // -----------------------------------------------------------------------
+    // Boot
+    // -----------------------------------------------------------------------
+    init();
+  </script>
+</body>
+</html>
